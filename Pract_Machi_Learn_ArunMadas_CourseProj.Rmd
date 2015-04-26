@@ -1,0 +1,121 @@
+#-------------------------------------------------------------------------------
+### Author : Arun Kumar Madas
+### Date   : 04/26/2015
+### Course : Practical Machine Learning - Project
+#-------------------------------------------------------------------------------
+
+# Executive Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. we may use any of the other variables to predict with. 
+
+# Libraries
+
+The following libraries were used throughout the code.
+
+```{r}
+library(caret)
+library(corrplot)
+library(kernlab)
+library(knitr)
+library(randomForest)
+opts_chunk$set(cache = FALSE)
+```
+
+# Loading and preprocessing the data
+
+Download the provided training and test data sets into working directory (two csv files)
+
+```{r}
+# file URL and destination file
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# #sets to use internet intended to use for downloading data file
+setInternet2(use = TRUE)
+setwd("C:/Arun/docs/dsc_jhu/8_Practical_Machine_Learning/courseproj")
+download.file(train_url, destfile = "./pml-training.csv")
+download.file(test_url, destfile = "./pml-testing.csv")
+```
+
+Load the Data
+
+```{r}
+# read the csv file for training 
+training_data <- read.csv("pml-training.csv", na.strings= c("NA",""," "))
+```
+
+Exclude possible NA values and empty/white spaces. 
+The first eight columns that acted as identifiers for the experiment were also removed.
+
+```{r}
+# clean the data by removing columns with NAs etc
+training_data_NAs <- apply(training_data, 2, function(x) {sum(is.na(x))})
+training_data_clean <- training_data[,which(training_data_NAs == 0)]
+
+# remove identifier columns such as name, timestamps etc
+training_data_clean <- training_data_clean[8:length(training_data_clean)]
+```
+
+# Creating a model
+
+The test data set was split up into training and cross validation sets in a 70:30 ratio in order to train the model and then test it against data it was not specifically fitted to.
+
+```{r}
+# split the cleaned testing data into training and cross validation
+inTrain <- createDataPartition(y = training_data_clean$classe, p = 0.7, list = FALSE)
+training <- training_data_clean[inTrain, ]
+crossval <- training_data_clean[-inTrain, ]
+```
+
+A random forest model was selected to predict the classification because it has methods for balancing error in class population unbalanced data sets. The correlation between any two trees in the forest increases the forest error rate. Therefore, a correllation plot was produced in order to see how strong the variables relationships are with each other.
+
+```{r}
+# plot a correlation matrix
+correlMatrix <- cor(training[, -length(training)])
+corrplot(correlMatrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.8,  tl.col = rgb(0, 0, 0))
+```
+
+In this type of plot the dark red and blue colours indicate a highly negative and positive relationship respectively between the variables. There isn't much concern for highly correlated predictors which means that all of them can be included in the model.
+
+Then a model was fitted with the outcome set to the training class and all the other variables used to predict.
+
+```{r}
+# fit a model to predict the classe using everything else as a predictor
+model <- randomForest(classe ~ ., data = training)
+model
+```
+
+The model produced a very small OOB error rate of .56%. This was deemed satisfactory enough to progress the testing.
+
+# Cross-validation
+
+The model was then used to classify the remaining 30% of data. The results were placed in a confusion matrix along with the actual classifications in order to determine the accuracy of the model.
+
+```{r}
+# crossvalidate the model using the remaining 30% of data
+predictCrossVal <- predict(model, crossval)
+confusionMatrix(crossval$classe, predictCrossVal)
+```
+
+This model yielded a 99.3% prediction accuracy. Again, this model proved very robust and adequete to predict new data.
+
+# Predictions
+
+Read the data set freshly again. The model was then used to predict the classifications of the 20 results of this newly read data.
+
+```{r}
+# apply the same treatment to the final testing data
+test_data <- read.csv("./pml-testing.csv", na.strings= c("NA",""," "))
+test_data_NAs <- apply(test_data, 2, function(x) {sum(is.na(x))})
+test_data_clean <- test_data[,which(test_data_NAs == 0)]
+test_data_clean <- test_data_clean[8:length(test_data_clean)]
+
+# predict the classes of the test set
+predictTest <- predict(model, test_data_clean)
+predictTest
+```
+
+# Conclusions
+
+Since there is a lot of information given from multiple measuring instruments, its now possible to accurately predict how well a person is doing excercise with a simple model.
